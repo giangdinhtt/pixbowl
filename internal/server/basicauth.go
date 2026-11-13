@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/giangdinhtt/pixbowl/internal/id"
 )
 
@@ -40,9 +42,13 @@ func (s *Server) checkBasicAuth(r *http.Request) bool {
 	if !ok {
 		return false
 	}
-	// Compare both fields before returning so the response time does not leak
-	// whether the username was correct.
-	userOK := id.Equal(user, s.cfg.BasicAuthUser)
-	passOK := id.Equal(pass, s.cfg.BasicAuthPass)
-	return userOK && passOK
+	if !id.Equal(user, s.cfg.BasicAuthUser) {
+		return false
+	}
+	if s.cfg.BasicAuthHash != "" {
+		// bcrypt is deliberately slow; a failed username check above keeps
+		// unauthenticated requests from burning CPU on hashing.
+		return bcrypt.CompareHashAndPassword([]byte(s.cfg.BasicAuthHash), []byte(pass)) == nil
+	}
+	return id.Equal(pass, s.cfg.BasicAuthSecret)
 }

@@ -1,8 +1,11 @@
 package config
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func loadMap(env map[string]string) (*Config, error) {
@@ -115,35 +118,82 @@ func TestAllowedOriginsParsing(t *testing.T) {
 }
 
 func TestBasicAuthConfig(t *testing.T) {
-	if _, err := loadMap(map[string]string{"BASIC_AUTH_USER": "alice"}); err == nil {
-		t.Fatal("user without password must be rejected")
-	}
-	if _, err := loadMap(map[string]string{"BASIC_AUTH_PASS": "secret"}); err == nil {
-		t.Fatal("password without user must be rejected")
-	}
-
-	cfg, err := loadMap(map[string]string{
-		"BASIC_AUTH_USER": "  alice  ",
-		"BASIC_AUTH_PASS": " p@ss word ",
+	t.Run("plain", func(t *testing.T) {
+		cfg, err := loadMap(map[string]string{"BASIC_AUTH": "alice: p@ss word"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.BasicAuthUser != "alice" || cfg.BasicAuthSecret != " p@ss word" {
+			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
+		}
+		if cfg.BasicAuthHash != "" {
+			t.Fatal("hash should be empty")
+		}
+		if !cfg.BasicAuthEnabled() {
+			t.Fatal("basic auth should be enabled")
+		}
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.BasicAuthUser != "alice" {
-		t.Fatalf("user = %q, want trimmed", cfg.BasicAuthUser)
-	}
-	if cfg.BasicAuthPass != " p@ss word " {
-		t.Fatalf("password whitespace must be preserved, got %q", cfg.BasicAuthPass)
-	}
-	if !cfg.BasicAuthEnabled() {
-		t.Fatal("basic auth should be enabled")
-	}
 
-	disabled, err := loadMap(map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if disabled.BasicAuthEnabled() {
-		t.Fatal("basic auth must be disabled when unset")
-	}
+	t.Run("base64", func(t *testing.T) {
+		encoded := base64.StdEncoding.EncodeToString([]byte("alice:s3cret"))
+		cfg, err := loadMap(map[string]string{"BASIC_AUTH": encoded})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.BasicAuthUser != "alice" || cfg.BasicAuthSecret != "s3cret" {
+			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
+		}
+	})
+
+	t.Run("base64 without padding", func(t *testing.T) {
+		encoded := base64.RawStdEncoding.EncodeToString([]byte("bob:hunter2"))
+		cfg, err := loadMap(map[string]string{"BASIC_AUTH": encoded})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.BasicAuthUser != "bob" || cfg.BasicAuthSecret != "hunter2" {
+			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
+		}
+	})
+
+	t.Run("bcrypt", func(t *testing.T) {
+		hash, err := bcrypt.GenerateFromPassword([]byte("s3cret"), bcrypt.MinCost)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := loadMap(map[string]string{"BASIC_AUTH": "alice:" + string(hash)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.BasicAuthHash == "" || cfg.BasicAuthSecret != "" {
+			t.Fatalf("hash=%q secret=%q", cfg.BasicAuthHash, cfg.BasicAuthSecret)
+		}
+		if !cfg.BasicAuthEnabled() {
+			t.Fatal("basic auth should be enabled")
+		}
+	})
+
+	t.Run("rejects malformed", func(t *testing.T) {
+		cases := []string{
+			"alice",            // no colon and not base64 of user:pass
+			"alice:",           // empty password
+			":s3cret",          // empty user
+			"alice:$2y$10$bad", // truncated bcrypt hash
+		}
+		for _, raw := range cases {
+			if _, err := loadMap(map[string]string{"BASIC_AUTH": raw}); err == nil {
+				t.Fatalf("%q should be rejected", raw)
+			}
+		}
+	})
+
+	t.Run("disabled by default", func(t *testing.T) {
+		cfg, err := loadMap(map[string]string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.BasicAuthEnabled() {
+			t.Fatal("basic auth must be disabled when unset")
+		}
+	})
 }

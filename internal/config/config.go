@@ -1,11 +1,14 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type lookupFunc func(string) (string, bool)
@@ -51,7 +54,8 @@ type Config struct {
 	AllowedOrigins        []string
 	AdminToken            string
 	BasicAuthUser         string
-	BasicAuthPass         string
+	BasicAuthSecret       string // plain-text password, empty when BasicAuthHash is used
+	BasicAuthHash         string // bcrypt hash, mutually exclusive with BasicAuthSecret
 
 	Concurrency           int
 	MaxConcurrentUploads  int
@@ -201,10 +205,8 @@ func load(lookup lookupFunc) (*Config, error) {
 
 	// Basic auth only guards the upload UI and the upload endpoint; public
 	// image links stay reachable without credentials.
-	cfg.BasicAuthUser = envString(lookup, "BASIC_AUTH_USER", "")
-	cfg.BasicAuthPass = envRaw(lookup, "BASIC_AUTH_PASS", "")
-	if (cfg.BasicAuthUser == "") != (cfg.BasicAuthPass == "") {
-		return nil, fmt.Errorf("BASIC_AUTH_USER and BASIC_AUTH_PASS must be set together")
+	if err := cfg.applyBasicAuth(envString(lookup, "BASIC_AUTH", "")); err != nil {
+		return nil, err
 	}
 
 	if cfg.Concurrency, err = envInt(lookup, "VIPS_CONCURRENCY", cfg.Concurrency); err != nil {
@@ -286,14 +288,6 @@ func load(lookup lookupFunc) (*Config, error) {
 	return cfg, nil
 }
 
-// envRaw keeps whitespace intact, which matters for passwords.
-func envRaw(lookup lookupFunc, key, fallback string) string {
-	if raw, ok := lookup(key); ok && raw != "" {
-		return raw
-	}
-	return fallback
-}
-
 func envString(lookup lookupFunc, key, fallback string) string {
 	if raw, ok := lookup(key); ok {
 		value := strings.TrimSpace(raw)
@@ -366,7 +360,63 @@ func parseSizes(raw string) ([]int, error) {
 
 // BasicAuthEnabled reports whether the upload UI is password protected.
 func (c *Config) BasicAuthEnabled() bool {
-	return c.BasicAuthUser != "" && c.BasicAuthPass != ""
+	return c.BasicAuthUser != "" && (c.BasicAuthSecret != "" || c.BasicAuthHash != "")
+}
+
+// applyBasicAuth decodes the single BASIC_AUTH variable. Accepted forms:
+//
+//	alice:secret                      plain user:password
+//	base64("alice:secret")            same value an Authorization header carries
+//	alice:$2y$10$...                  bcrypt hash, so no plaintext secret is stored
+func (c *Config) applyBasicAuth(raw string) error {
+	user, secret, hash, err := parseBasicAuth(raw)
+	if err != nil {
+		return err
+	}
+	c.BasicAuthUser, c.BasicAuthSecret, c.BasicAuthHash = user, secret, hash
+	return nil
+}
+
+func parseBasicAuth(raw string) (user, secret, hash string, err error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", "", "", nil
+	}
+
+	decoded := value
+	if !strings.Contains(value, ":") {
+		// Base64 never contains ':', so its presence means the value is already
+		// in user:secret form. Try the padded and unpadded alphabets.
+		decoded = ""
+		for _, encoding := range []*base64.Encoding{
+			base64.StdEncoding,
+			base64.RawStdEncoding,
+			base64.URLEncoding,
+			base64.RawURLEncoding,
+		} {
+			if data, decodeErr := encoding.DecodeString(value); decodeErr == nil {
+				decoded = string(data)
+				break
+			}
+		}
+		if decoded == "" {
+			return "", "", "", fmt.Errorf(`BASIC_AUTH must be "user:password", base64("user:password") or "user:<bcrypt hash>"`)
+		}
+	}
+
+	user, secret, found := strings.Cut(decoded, ":")
+	if !found || user == "" || secret == "" {
+		return "", "", "", fmt.Errorf(`BASIC_AUTH must contain "user:password"`)
+	}
+	if strings.HasPrefix(secret, "$2") {
+		// Looks like a bcrypt hash; refuse to fall back to treating a typo as
+		// a plain-text password.
+		if _, costErr := bcrypt.Cost([]byte(secret)); costErr != nil {
+			return "", "", "", fmt.Errorf("BASIC_AUTH contains an invalid bcrypt hash: %w", costErr)
+		}
+		return user, "", secret, nil
+	}
+	return user, secret, "", nil
 }
 
 // SizeAllowed reports whether a requested variant dimension is permitted.

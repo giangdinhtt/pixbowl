@@ -15,8 +15,7 @@ services:
       # TRUST_PROXY: "true"
       # BASE_URL: "https://pix.example.com"
       # ADMIN_TOKEN: "doi-thanh-chuoi-bi-mat"
-      # BASIC_AUTH_USER: "alice"
-      # BASIC_AUTH_PASS: "mat-khau-manh"
+      # BASIC_AUTH: "alice:mat-khau-manh"
       # ALLOWED_ORIGINS: "https://app.example.com"
     volumes:
       - ./data:/data

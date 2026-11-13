@@ -22,6 +22,7 @@ import (
 	"github.com/giangdinhtt/pixbowl/internal/config"
 	"github.com/giangdinhtt/pixbowl/internal/imageproc"
 	"github.com/giangdinhtt/pixbowl/internal/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestMain(m *testing.M) {
@@ -484,7 +485,7 @@ func TestAdminTokenCanDelete(t *testing.T) {
 func TestBasicAuthGuardsUploadOnly(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.BasicAuthUser = "alice"
-	cfg.BasicAuthPass = "s3cret pass"
+	cfg.BasicAuthSecret = "s3cret pass"
 	ts := newTestServer(t, cfg)
 
 	anonymous := get(t, ts.URL+"/")
@@ -536,5 +537,29 @@ func TestBasicAuthGuardsUploadOnly(t *testing.T) {
 	health.Body.Close()
 	if health.StatusCode != http.StatusOK {
 		t.Fatalf("healthz = %d, want 200", health.StatusCode)
+	}
+}
+
+func TestBasicAuthBcrypt(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("s3cret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testConfig(t)
+	cfg.BasicAuthUser = "alice"
+	cfg.BasicAuthHash = string(hash)
+	ts := newTestServer(t, cfg)
+
+	ok := getWithAuth(t, ts.URL+"/", "alice", "s3cret")
+	ok.Body.Close()
+	if ok.StatusCode != http.StatusOK {
+		t.Fatalf("valid bcrypt credentials = %d, want 200", ok.StatusCode)
+	}
+
+	bad := getWithAuth(t, ts.URL+"/", "alice", "wrong")
+	bad.Body.Close()
+	if bad.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong password = %d, want 401", bad.StatusCode)
 	}
 }
