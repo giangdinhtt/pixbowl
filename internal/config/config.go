@@ -50,6 +50,8 @@ type Config struct {
 	AuthAttemptsPerMinute int
 	AllowedOrigins        []string
 	AdminToken            string
+	BasicAuthUser         string
+	BasicAuthPass         string
 
 	Concurrency           int
 	MaxConcurrentUploads  int
@@ -197,6 +199,14 @@ func load(lookup lookupFunc) (*Config, error) {
 	cfg.AllowedOrigins = splitList(envString(lookup, "ALLOWED_ORIGINS", ""))
 	cfg.AdminToken = envString(lookup, "ADMIN_TOKEN", "")
 
+	// Basic auth only guards the upload UI and the upload endpoint; public
+	// image links stay reachable without credentials.
+	cfg.BasicAuthUser = envString(lookup, "BASIC_AUTH_USER", "")
+	cfg.BasicAuthPass = envRaw(lookup, "BASIC_AUTH_PASS", "")
+	if (cfg.BasicAuthUser == "") != (cfg.BasicAuthPass == "") {
+		return nil, fmt.Errorf("BASIC_AUTH_USER and BASIC_AUTH_PASS must be set together")
+	}
+
 	if cfg.Concurrency, err = envInt(lookup, "VIPS_CONCURRENCY", cfg.Concurrency); err != nil {
 		return nil, err
 	}
@@ -276,6 +286,14 @@ func load(lookup lookupFunc) (*Config, error) {
 	return cfg, nil
 }
 
+// envRaw keeps whitespace intact, which matters for passwords.
+func envRaw(lookup lookupFunc, key, fallback string) string {
+	if raw, ok := lookup(key); ok && raw != "" {
+		return raw
+	}
+	return fallback
+}
+
 func envString(lookup lookupFunc, key, fallback string) string {
 	if raw, ok := lookup(key); ok {
 		value := strings.TrimSpace(raw)
@@ -344,6 +362,11 @@ func parseSizes(raw string) ([]int, error) {
 		sizes = append(sizes, value)
 	}
 	return sizes, nil
+}
+
+// BasicAuthEnabled reports whether the upload UI is password protected.
+func (c *Config) BasicAuthEnabled() bool {
+	return c.BasicAuthUser != "" && c.BasicAuthPass != ""
 }
 
 // SizeAllowed reports whether a requested variant dimension is permitted.

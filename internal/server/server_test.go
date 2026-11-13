@@ -116,6 +116,11 @@ func testPNG(t *testing.T, w, h int) []byte {
 
 func uploadRequest(t *testing.T, ts *httptest.Server, files map[string][]byte) *http.Response {
 	t.Helper()
+	return uploadRequestAs(t, ts, files, "", "")
+}
+
+func uploadRequestAs(t *testing.T, ts *httptest.Server, files map[string][]byte, user, pass string) *http.Response {
+	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	for name, data := range files {
@@ -136,6 +141,9 @@ func uploadRequest(t *testing.T, ts *httptest.Server, files map[string][]byte) *
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if user != "" || pass != "" {
+		req.SetBasicAuth(user, pass)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -156,6 +164,20 @@ func decodeUpload(t *testing.T, resp *http.Response) uploadPayload {
 		t.Fatalf("decode %q: %v", raw, err)
 	}
 	return payload
+}
+
+func getWithAuth(t *testing.T, url, user, pass string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(user, pass)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
 }
 
 func get(t *testing.T, url string) *http.Response {
@@ -456,5 +478,63 @@ func TestAdminTokenCanDelete(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin delete = %d", resp.StatusCode)
+	}
+}
+
+func TestBasicAuthGuardsUploadOnly(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.BasicAuthUser = "alice"
+	cfg.BasicAuthPass = "s3cret pass"
+	ts := newTestServer(t, cfg)
+
+	anonymous := get(t, ts.URL+"/")
+	anonymous.Body.Close()
+	if anonymous.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("index without credentials = %d, want 401", anonymous.StatusCode)
+	}
+	if !strings.HasPrefix(anonymous.Header.Get("WWW-Authenticate"), "Basic ") {
+		t.Fatalf("WWW-Authenticate = %q", anonymous.Header.Get("WWW-Authenticate"))
+	}
+
+	wrong := getWithAuth(t, ts.URL+"/", "alice", "wrong")
+	wrong.Body.Close()
+	if wrong.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("index with wrong password = %d, want 401", wrong.StatusCode)
+	}
+
+	authorised := getWithAuth(t, ts.URL+"/", "alice", "s3cret pass")
+	authorised.Body.Close()
+	if authorised.StatusCode != http.StatusOK {
+		t.Fatalf("index with credentials = %d, want 200", authorised.StatusCode)
+	}
+
+	denied := uploadRequestAs(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)}, "", "")
+	denied.Body.Close()
+	if denied.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("upload without credentials = %d, want 401", denied.StatusCode)
+	}
+
+	allowed := uploadRequestAs(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)}, "alice", "s3cret pass")
+	if allowed.StatusCode != http.StatusOK {
+		t.Fatalf("upload with credentials = %d, want 200", allowed.StatusCode)
+	}
+	payload := decodeUpload(t, allowed)
+
+	published := get(t, payload.URL)
+	published.Body.Close()
+	if published.StatusCode != http.StatusOK {
+		t.Fatalf("public image link = %d, want 200", published.StatusCode)
+	}
+
+	deletePage := get(t, ts.URL+"/d/"+payload.ID)
+	deletePage.Body.Close()
+	if deletePage.StatusCode != http.StatusOK {
+		t.Fatalf("delete page = %d, want 200", deletePage.StatusCode)
+	}
+
+	health := get(t, ts.URL+"/healthz")
+	health.Body.Close()
+	if health.StatusCode != http.StatusOK {
+		t.Fatalf("healthz = %d, want 200", health.StatusCode)
 	}
 }

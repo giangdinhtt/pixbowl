@@ -87,9 +87,9 @@ func (s *Server) cleanupLoop() {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("POST /{$}", s.handleUpload)
-	mux.HandleFunc("POST /upload", s.handleUpload)
+	mux.HandleFunc("GET /{$}", s.requireBasicAuth(s.handleIndex))
+	mux.HandleFunc("POST /{$}", s.requireBasicAuth(s.handleUpload))
+	mux.HandleFunc("POST /upload", s.requireBasicAuth(s.handleUpload))
 
 	mux.HandleFunc("GET /i/{name}", s.handleImage)
 	mux.HandleFunc("GET /o/{name}", s.handleOriginal)

@@ -113,3 +113,37 @@ func TestAllowedOriginsParsing(t *testing.T) {
 		t.Fatalf("origins = %v", cfg.AllowedOrigins)
 	}
 }
+
+func TestBasicAuthConfig(t *testing.T) {
+	if _, err := loadMap(map[string]string{"BASIC_AUTH_USER": "alice"}); err == nil {
+		t.Fatal("user without password must be rejected")
+	}
+	if _, err := loadMap(map[string]string{"BASIC_AUTH_PASS": "secret"}); err == nil {
+		t.Fatal("password without user must be rejected")
+	}
+
+	cfg, err := loadMap(map[string]string{
+		"BASIC_AUTH_USER": "  alice  ",
+		"BASIC_AUTH_PASS": " p@ss word ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BasicAuthUser != "alice" {
+		t.Fatalf("user = %q, want trimmed", cfg.BasicAuthUser)
+	}
+	if cfg.BasicAuthPass != " p@ss word " {
+		t.Fatalf("password whitespace must be preserved, got %q", cfg.BasicAuthPass)
+	}
+	if !cfg.BasicAuthEnabled() {
+		t.Fatal("basic auth should be enabled")
+	}
+
+	disabled, err := loadMap(map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if disabled.BasicAuthEnabled() {
+		t.Fatal("basic auth must be disabled when unset")
+	}
+}

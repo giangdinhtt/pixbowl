@@ -17,6 +17,7 @@ Image host tối giản cho VPS yếu: upload công khai, trả link riêng cho 
 | Resize | `?w=320`, `?h=200`, `?w=640&h=640&fit=cover`, `?format=webp`, cache variant |
 | Xoá | `X-Delete-Token` (người upload) hoặc `Authorization: Bearer <ADMIN_TOKEN>` |
 | Chống lạm dụng | rate limit theo IP, giới hạn dung lượng/điểm ảnh, chặn SVG/HTML/PDF |
+| Xác thực | HTTP Basic Auth tuỳ chọn cho trang upload; link ảnh vẫn công khai |
 | Vận hành | `/liveness`, `/healthz`, log JSON, graceful shutdown, Docker non-root |
 | Riêng tư | link-only (`noindex`), không gallery, không liệt kê thư mục |
 
@@ -125,6 +126,20 @@ Xoá luôn cả bản gốc và mọi variant. Token chỉ lưu dạng SHA-256. 
 
 Trang `/d/<id>#<token>` cho phép xoá bằng trình duyệt; token nằm sau `#` nên không lọt vào log/referrer.
 
+### Bảo vệ trang upload bằng Basic Auth
+
+Đặt `BASIC_AUTH_USER` và `BASIC_AUTH_PASS` (phải đặt cùng nhau) để chặn người lạ upload:
+
+```bash
+BASIC_AUTH_USER=alice BASIC_AUTH_PASS='mat-khau-manh' ./bin/pixbowl
+```
+
+```bash
+curl -u alice:mat-khau-manh -F "file=@anh.jpg" https://pix.example.com/upload
+```
+
+Trình duyệt sẽ hỏi mật khẩu khi mở `/`. Chỉ **trang `/` và endpoint `POST /upload`** bị bảo vệ — `/i/`, `/o/`, `/d/<id>#token` và `/healthz` vẫn công khai, vì chặn link ảnh thì không còn chia sẻ được nữa. Sai mật khẩu bị tính chung hạn mức với token xoá (`AUTH_ATTEMPTS_PER_MINUTE`, mặc định 10 lần/phút/IP).
+
 ### Health
 
 ```
@@ -155,6 +170,7 @@ Toàn bộ qua biến môi trường, xem `.env.example`. Những biến quan tr
 | `AUTH_ATTEMPTS_PER_MINUTE` | `10` | giới hạn thử token xoá sai |
 | `ALLOWED_ORIGINS` | rỗng | danh sách origin được CORS, rỗng = chặn hẳn |
 | `ADMIN_TOKEN` | rỗng | token xoá mọi ảnh |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | rỗng | bảo vệ `/` và `POST /upload` bằng HTTP Basic Auth; phải đặt cùng nhau |
 | `ALLOWED_SIZES` | `100,200,...,2560` | whitelist `?w=`/`?h=`, để trống = mọi giá trị 16..`MAX_VARIANT_DIMENSION` |
 | `MAX_VARIANT_DIMENSION` | `4096` | chặn kích thước variant quá lớn |
 | `VIPS_CONCURRENCY` | `1` | số thread libvips cho mỗi ảnh |
@@ -230,6 +246,7 @@ WantedBy=multi-user.target
 - **Không bao giờ serve HTML do người dùng kiểm soát**: ảnh trả với `nosniff`, trang HTML có CSP `default-src 'none'`.
 - **ID 12 ký tự base62** (~71 bit) — không đoán được, không liệt kê được.
 - **Token xoá lưu dạng hash**, so sánh constant-time, giới hạn số lần thử.
+- **Upload có thể khoá bằng Basic Auth** (`BASIC_AUTH_USER`/`BASIC_AUTH_PASS`); link ảnh vẫn công khai theo đúng mô hình link-only.
 - **Không có CORS mặc định** — JS ở site khác không đọc được ảnh; `<img>` vẫn nhúng bình thường.
 - **AVIF phụ thuộc build libvips**. Nếu `heifsave` không có, server trả `400` cho `?format=avif` và từ chối khởi động với `OUTPUT_FORMAT=avif`. Kiểm tra `/healthz` để biết format hỗ trợ.
 
