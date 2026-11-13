@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -118,44 +117,6 @@ func TestAllowedOriginsParsing(t *testing.T) {
 }
 
 func TestBasicAuthConfig(t *testing.T) {
-	t.Run("plain", func(t *testing.T) {
-		cfg, err := loadMap(map[string]string{"BASIC_AUTH": "alice: p@ss word"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.BasicAuthUser != "alice" || cfg.BasicAuthSecret != " p@ss word" {
-			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
-		}
-		if cfg.BasicAuthHash != "" {
-			t.Fatal("hash should be empty")
-		}
-		if !cfg.BasicAuthEnabled() {
-			t.Fatal("basic auth should be enabled")
-		}
-	})
-
-	t.Run("base64", func(t *testing.T) {
-		encoded := base64.StdEncoding.EncodeToString([]byte("alice:s3cret"))
-		cfg, err := loadMap(map[string]string{"BASIC_AUTH": encoded})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.BasicAuthUser != "alice" || cfg.BasicAuthSecret != "s3cret" {
-			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
-		}
-	})
-
-	t.Run("base64 without padding", func(t *testing.T) {
-		encoded := base64.RawStdEncoding.EncodeToString([]byte("bob:hunter2"))
-		cfg, err := loadMap(map[string]string{"BASIC_AUTH": encoded})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.BasicAuthUser != "bob" || cfg.BasicAuthSecret != "hunter2" {
-			t.Fatalf("user=%q secret=%q", cfg.BasicAuthUser, cfg.BasicAuthSecret)
-		}
-	})
-
 	t.Run("bcrypt", func(t *testing.T) {
 		hash, err := bcrypt.GenerateFromPassword([]byte("s3cret"), bcrypt.MinCost)
 		if err != nil {
@@ -165,25 +126,38 @@ func TestBasicAuthConfig(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cfg.BasicAuthHash == "" || cfg.BasicAuthSecret != "" {
-			t.Fatalf("hash=%q secret=%q", cfg.BasicAuthHash, cfg.BasicAuthSecret)
+		if cfg.BasicAuthUser != "alice" || cfg.BasicAuthHash != string(hash) {
+			t.Fatalf("user=%q hash=%q", cfg.BasicAuthUser, cfg.BasicAuthHash)
 		}
 		if !cfg.BasicAuthEnabled() {
 			t.Fatal("basic auth should be enabled")
 		}
 	})
 
-	t.Run("rejects malformed", func(t *testing.T) {
+	t.Run("rejects other forms", func(t *testing.T) {
+		// A malformed config must fail loudly instead of silently becoming a
+		// plain-text password.
 		cases := []string{
-			"alice",            // no colon and not base64 of user:pass
+			"alice:secret",     // plain password
+			"YWxpY2U6c2VjcmV0", // base64 of user:password
+			"alice",            // no colon
 			"alice:",           // empty password
-			":s3cret",          // empty user
-			"alice:$2y$10$bad", // truncated bcrypt hash
+			":$2y$05$...",      // empty user
+			"alice:$2y$10$bad", // truncated hash
+			"alice:$2y$05$" + strings.Repeat("a", 53) + "x", // wrong length
 		}
 		for _, raw := range cases {
 			if _, err := loadMap(map[string]string{"BASIC_AUTH": raw}); err == nil {
 				t.Fatalf("%q should be rejected", raw)
 			}
+		}
+	})
+
+	t.Run("rejects excessive cost", func(t *testing.T) {
+		expensive := "alice:$2y$15$" + strings.Repeat("a", 53)
+		_, err := loadMap(map[string]string{"BASIC_AUTH": expensive})
+		if err == nil || !strings.Contains(err.Error(), "cost") {
+			t.Fatalf("err = %v, want cost error", err)
 		}
 	})
 

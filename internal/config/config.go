@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
@@ -360,63 +359,48 @@ func parseSizes(raw string) ([]int, error) {
 
 // BasicAuthEnabled reports whether the upload UI is password protected.
 func (c *Config) BasicAuthEnabled() bool {
-	return c.BasicAuthUser != "" && (c.BasicAuthSecret != "" || c.BasicAuthHash != "")
+	return c.BasicAuthUser != "" && c.BasicAuthHash != ""
 }
 
-// applyBasicAuth decodes the single BASIC_AUTH variable. Accepted forms:
-//
-//	alice:secret                      plain user:password
-//	base64("alice:secret")            same value an Authorization header carries
-//	alice:$2y$10$...                  bcrypt hash, so no plaintext secret is stored
+// maxBcryptCost keeps a typo from turning every login into a multi-second stall
+// on a small VPS. Cost 14 is already ~1s on modest hardware.
+const maxBcryptCost = 14
+
+// applyBasicAuth decodes the single BASIC_AUTH variable. The only accepted form
+// is "user:<bcrypt hash>", so the password itself never appears in the config.
 func (c *Config) applyBasicAuth(raw string) error {
-	user, secret, hash, err := parseBasicAuth(raw)
+	user, hash, err := parseBasicAuth(raw)
 	if err != nil {
 		return err
 	}
-	c.BasicAuthUser, c.BasicAuthSecret, c.BasicAuthHash = user, secret, hash
+	c.BasicAuthUser, c.BasicAuthHash = user, hash
 	return nil
 }
 
-func parseBasicAuth(raw string) (user, secret, hash string, err error) {
+func parseBasicAuth(raw string) (user, hash string, err error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return "", "", "", nil
+		return "", "", nil
 	}
 
-	decoded := value
-	if !strings.Contains(value, ":") {
-		// Base64 never contains ':', so its presence means the value is already
-		// in user:secret form. Try the padded and unpadded alphabets.
-		decoded = ""
-		for _, encoding := range []*base64.Encoding{
-			base64.StdEncoding,
-			base64.RawStdEncoding,
-			base64.URLEncoding,
-			base64.RawURLEncoding,
-		} {
-			if data, decodeErr := encoding.DecodeString(value); decodeErr == nil {
-				decoded = string(data)
-				break
-			}
-		}
-		if decoded == "" {
-			return "", "", "", fmt.Errorf(`BASIC_AUTH must be "user:password", base64("user:password") or "user:<bcrypt hash>"`)
-		}
-	}
+	const hint = `BASIC_AUTH must be "user:<bcrypt hash>", e.g. alice:$2y$10$... (generate with: htpasswd -nbB -C 10 alice 'password')`
 
-	user, secret, found := strings.Cut(decoded, ":")
+	user, secret, found := strings.Cut(value, ":")
 	if !found || user == "" || secret == "" {
-		return "", "", "", fmt.Errorf(`BASIC_AUTH must contain "user:password"`)
+		return "", "", fmt.Errorf("%s", hint)
 	}
-	if strings.HasPrefix(secret, "$2") {
-		// Looks like a bcrypt hash; refuse to fall back to treating a typo as
-		// a plain-text password.
-		if _, costErr := bcrypt.Cost([]byte(secret)); costErr != nil {
-			return "", "", "", fmt.Errorf("BASIC_AUTH contains an invalid bcrypt hash: %w", costErr)
-		}
-		return user, "", secret, nil
+	if !strings.HasPrefix(secret, "$2") || len(secret) != 60 {
+		return "", "", fmt.Errorf("%s", hint)
 	}
-	return user, secret, "", nil
+
+	cost, costErr := bcrypt.Cost([]byte(secret))
+	if costErr != nil {
+		return "", "", fmt.Errorf("BASIC_AUTH contains an invalid bcrypt hash: %w", costErr)
+	}
+	if cost > maxBcryptCost {
+		return "", "", fmt.Errorf("BASIC_AUTH bcrypt cost %d is too high (max %d); each login would take seconds", cost, maxBcryptCost)
+	}
+	return user, secret, nil
 }
 
 // SizeAllowed reports whether a requested variant dimension is permitted.

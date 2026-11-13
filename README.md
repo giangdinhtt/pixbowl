@@ -128,24 +128,17 @@ Trang `/d/<id>#<token>` cho phép xoá bằng trình duyệt; token nằm sau `#
 
 ### Bảo vệ trang upload bằng Basic Auth
 
-Chỉ cần **một biến** `BASIC_AUTH`, nhận 3 dạng:
+`BASIC_AUTH` chỉ nhận **bcrypt hash** — mật khẩu không bao giờ nằm trong file cấu hình:
 
 ```bash
-# 1) user:password
-BASIC_AUTH='alice:mat-khau-manh'
+# macOS có sẵn /usr/sbin/htpasswd, Debian/Ubuntu: apt install apache2-utils
+BASIC_AUTH="$(htpasswd -nbB -C 10 alice 'mat-khau-manh')"
+echo "$BASIC_AUTH"      # alice:$2y$10$...
 
-# 2) base64 của "user:password" — đúng chuỗi trong header Authorization: Basic
-BASIC_AUTH="$(printf 'alice:mat-khau-manh' | base64)"
-
-# 3) bcrypt hash — không lưu mật khẩu plaintext
-BASIC_AUTH='alice:$2y$10$...'      # tạo bằng: htpasswd -nbB alice 'mat-khau-manh'
+BASIC_AUTH="$BASIC_AUTH" ./bin/pixbowl
 ```
 
-```bash
-BASIC_AUTH='alice:mat-khau-manh' ./bin/pixbowl
-```
-
-Base64 chỉ là encoding, không phải mã hoá — ai đọc được biến môi trường thì giải mã được. Nếu muốn an toàn hơn khi file `.env` bị lộ, dùng dạng bcrypt (3).
+Dạng `user:password` plain và base64 đều bị từ chối lúc khởi động, để một lần gõ nhầm không âm thầm biến thành mật khẩu plaintext. Hash phải đúng 60 ký tự và cost ≤ 14 (cost cao hơn khiến mỗi lần đăng nhập mất vài giây).
 
 ```bash
 curl -u alice:mat-khau-manh -F "file=@anh.jpg" https://pix.example.com/upload
@@ -183,7 +176,7 @@ Toàn bộ qua biến môi trường, xem `.env.example`. Những biến quan tr
 | `AUTH_ATTEMPTS_PER_MINUTE` | `10` | giới hạn thử token xoá sai |
 | `ALLOWED_ORIGINS` | rỗng | danh sách origin được CORS, rỗng = chặn hẳn |
 | `ADMIN_TOKEN` | rỗng | token xoá mọi ảnh |
-| `BASIC_AUTH` | rỗng | bảo vệ `/` và `POST /upload`; nhận `user:pass`, base64 hoặc bcrypt hash |
+| `BASIC_AUTH` | rỗng | bảo vệ `/` và `POST /upload`; chỉ nhận `user:<bcrypt hash>` |
 | `ALLOWED_SIZES` | `100,200,...,2560` | whitelist `?w=`/`?h=`, để trống = mọi giá trị 16..`MAX_VARIANT_DIMENSION` |
 | `MAX_VARIANT_DIMENSION` | `4096` | chặn kích thước variant quá lớn |
 | `VIPS_CONCURRENCY` | `1` | số thread libvips cho mỗi ảnh |
@@ -259,7 +252,7 @@ WantedBy=multi-user.target
 - **Không bao giờ serve HTML do người dùng kiểm soát**: ảnh trả với `nosniff`, trang HTML có CSP `default-src 'none'`.
 - **ID 12 ký tự base62** (~71 bit) — không đoán được, không liệt kê được.
 - **Token xoá lưu dạng hash**, so sánh constant-time, giới hạn số lần thử.
-- **Upload có thể khoá bằng Basic Auth** (`BASIC_AUTH`, hỗ trợ bcrypt hash); link ảnh vẫn công khai theo đúng mô hình link-only.
+- **Upload có thể khoá bằng Basic Auth** (`BASIC_AUTH`, chỉ nhận bcrypt hash); link ảnh vẫn công khai theo đúng mô hình link-only.
 - **Không có CORS mặc định** — JS ở site khác không đọc được ảnh; `<img>` vẫn nhúng bình thường.
 - **AVIF phụ thuộc build libvips**. Nếu `heifsave` không có, server trả `400` cho `?format=avif` và từ chối khởi động với `OUTPUT_FORMAT=avif`. Kiểm tra `/healthz` để biết format hỗ trợ.
 

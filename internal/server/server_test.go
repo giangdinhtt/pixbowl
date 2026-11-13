@@ -483,9 +483,13 @@ func TestAdminTokenCanDelete(t *testing.T) {
 }
 
 func TestBasicAuthGuardsUploadOnly(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("s3cret pass"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := testConfig(t)
 	cfg.BasicAuthUser = "alice"
-	cfg.BasicAuthSecret = "s3cret pass"
+	cfg.BasicAuthHash = string(hash)
 	ts := newTestServer(t, cfg)
 
 	anonymous := get(t, ts.URL+"/")

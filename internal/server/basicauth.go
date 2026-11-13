@@ -45,10 +45,7 @@ func (s *Server) checkBasicAuth(r *http.Request) bool {
 	if !id.Equal(user, s.cfg.BasicAuthUser) {
 		return false
 	}
-	if s.cfg.BasicAuthHash != "" {
-		// bcrypt is deliberately slow; a failed username check above keeps
-		// unauthenticated requests from burning CPU on hashing.
-		return bcrypt.CompareHashAndPassword([]byte(s.cfg.BasicAuthHash), []byte(pass)) == nil
-	}
-	return id.Equal(pass, s.cfg.BasicAuthSecret)
+	// bcrypt is deliberately slow; a failed username check above keeps
+	// unauthenticated requests from burning CPU on hashing.
+	return bcrypt.CompareHashAndPassword([]byte(s.cfg.BasicAuthHash), []byte(pass)) == nil
 }
