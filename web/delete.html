@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>pixbowl — xoá ảnh</title>
+<style>
+  :root { --bg:#0e1014; --panel:#161a21; --line:#262c36; --text:#e6e9ef; --muted:#8b94a3; --danger:#ff7a7a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; align-items: center; padding: 24px;
+  }
+  main { width: 100%; max-width: 480px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  h1 { margin: 0 0 14px; font-size: 20px; }
+  p { margin: 0 0 14px; }
+  code { color: #b7c3d8; font-size: 13px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  button {
+    font: inherit; font-size: 14px; cursor: pointer; padding: 9px 16px;
+    border-radius: 8px; border: 1px solid #4a2a2e; background: #2a171a; color: #ffb3b3;
+  }
+  button:hover:not(:disabled) { border-color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  #result { margin-top: 16px; font-size: 14px; }
+  .ok { color: #7ee0a8; }
+  .bad { color: var(--danger); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Xoá ảnh</h1>
+  <p>Ảnh <code>{{ID}}</code> sẽ bị xoá vĩnh viễn, không khôi phục được.</p>
+  <p class="muted">Thao tác này chỉ chạy được khi mở đúng link xoá có kèm token (phần sau dấu #).</p>
+  <button id="go" type="button">Xoá vĩnh viễn</button>
+  <div id="result" role="status"></div>
+</main>
+<script>
+(function () {
+  var imageId = "{{ID}}";
+  var token = location.hash.slice(1);
+  var button = document.getElementById('go');
+  var result = document.getElementById('result');
+
+  if (!token) {
+    button.disabled = true;
+    result.className = 'bad';
+    result.textContent = 'Link này thiếu token xoá. Hãy dùng đúng link được trả về lúc upload.';
+    return;
+  }
+
+  button.addEventListener('click', async function () {
+    button.disabled = true;
+    result.className = '';
+    result.textContent = 'Đang xoá…';
+    try {
+      var response = await fetch('/i/' + imageId, {
+        method: 'DELETE',
+        headers: { 'X-Delete-Token': token }
+      });
+      var payload = await response.json().catch(function () { return {}; });
+      if (response.ok) {
+        result.className = 'ok';
+        result.textContent = 'Đã xoá ảnh và toàn bộ bản resize.';
+        history.replaceState(null, '', location.pathname);
+      } else if (response.status === 401) {
+        result.className = 'bad';
+        result.textContent = 'Token không đúng.';
+        button.disabled = false;
+      } else if (response.status === 404) {
+        result.className = 'bad';
+        result.textContent = 'Ảnh không tồn tại hoặc đã bị xoá trước đó.';
+      } else {
+        result.className = 'bad';
+        result.textContent = payload.message || ('Lỗi ' + response.status + '.');
+      }
+    } catch (err) {
+      result.className = 'bad';
+      result.textContent = 'Lỗi mạng: ' + err.message;
+      button.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
