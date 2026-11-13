@@ -196,29 +196,29 @@ func Process(src []byte, opt Options) (*Result, error) {
 	kind := vips.DetermineImageType(src)
 	sourceFormat := formatName(kind)
 	if !inputAllowed[kind] {
-		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Định dạng ảnh không được hỗ trợ (chỉ nhận JPEG, PNG, WebP, GIF, TIFF, HEIC, AVIF)."}
+		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Unsupported image format (accepted: JPEG, PNG, WebP, GIF, TIFF, HEIC, AVIF)."}
 	}
 
 	// Read dimensions from the header before libvips allocates anything, to
 	// defuse decompression bombs (a 5MB PNG can decode to gigabytes).
 	if width, height, ok := headerDimensions(src); ok {
 		if int64(width)*int64(height) > int64(opt.MaxPixels) {
-			return nil, &ImageError{Kind: ErrTooLarge, Msg: "Ảnh có số điểm ảnh vượt giới hạn cho phép."}
+			return nil, &ImageError{Kind: ErrTooLarge, Msg: "Image exceeds the pixel limit."}
 		}
 	}
 
 	ref, err := vips.NewImageFromBuffer(src)
 	if err != nil {
-		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Không đọc được ảnh (file hỏng hoặc định dạng lạ)."}
+		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Could not read the image (corrupt file or unknown format)."}
 	}
 	defer ref.Close()
 
 	meta := ref.Metadata()
 	if meta.Width <= 0 || meta.Height <= 0 {
-		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Không đọc được kích thước ảnh."}
+		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Could not read the image dimensions."}
 	}
 	if int64(meta.Width)*int64(meta.Height) > int64(opt.MaxPixels) {
-		return nil, &ImageError{Kind: ErrTooLarge, Msg: "Ảnh có số điểm ảnh vượt giới hạn cho phép."}
+		return nil, &ImageError{Kind: ErrTooLarge, Msg: "Image exceeds the pixel limit."}
 	}
 	if meta.Format != vips.ImageTypeUnknown {
 		sourceFormat = formatName(meta.Format)
@@ -257,7 +257,7 @@ func Process(src []byte, opt Options) (*Result, error) {
 	}
 	target = normalizeTarget(target)
 	if !SupportsFormat(target) {
-		return nil, &ImageError{Kind: ErrFormatDisabled, Msg: fmt.Sprintf("Máy chủ này không xuất được định dạng %s.", target)}
+		return nil, &ImageError{Kind: ErrFormatDisabled, Msg: fmt.Sprintf("This server cannot encode %s.", target)}
 	}
 
 	tw, th, padW, padH, crop := geometry(srcW, srcH, opt)
@@ -267,20 +267,20 @@ func Process(src []byte, opt Options) (*Result, error) {
 			interesting = vips.InterestingCentre
 		}
 		if err := ref.Thumbnail(tw, th, interesting); err != nil {
-			return nil, &ImageError{Kind: ErrUnsupported, Msg: "Không thay đổi được kích thước ảnh."}
+			return nil, &ImageError{Kind: ErrUnsupported, Msg: "Could not resize the image."}
 		}
 	}
 	if padW > tw || padH > th {
 		left := (padW - tw) / 2
 		top := (padH - th) / 2
 		if err := ref.EmbedBackground(left, top, padW, padH, &vips.Color{R: 255, G: 255, B: 255}); err != nil {
-			return nil, &ImageError{Kind: ErrUnsupported, Msg: "Không tạo được khung ảnh."}
+			return nil, &ImageError{Kind: ErrUnsupported, Msg: "Could not pad the image."}
 		}
 	}
 
 	data, err := encode(ref, target, opt.Quality, opt.StripMetadata)
 	if err != nil {
-		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Không mã hoá được ảnh sang định dạng đích."}
+		return nil, &ImageError{Kind: ErrUnsupported, Msg: "Could not encode the image to the target format."}
 	}
 
 	final := ref.Metadata()

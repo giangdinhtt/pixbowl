@@ -28,10 +28,10 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		// is never throttled, while guessing tokens is.
 		if allowed, retry := s.authLimiter.Allow(s.clientIP(r)); !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retry.Seconds()))))
-			s.writeError(w, http.StatusTooManyRequests, "rate_limited", "Quá nhiều lần thử sai, thử lại sau.")
+			s.writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed attempts, try again later.")
 			return
 		}
-		s.writeError(w, http.StatusUnauthorized, "unauthorized", "Cần delete token (header X-Delete-Token) hoặc admin token.")
+		s.writeError(w, http.StatusUnauthorized, "unauthorized", "A delete token (X-Delete-Token header) or the admin token is required.")
 		return
 	}
 

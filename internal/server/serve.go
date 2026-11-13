@@ -64,7 +64,7 @@ func (s *Server) handleOriginal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if meta.Original == nil {
-		s.writeError(w, http.StatusNotFound, "original_not_kept", "Ảnh này không lưu bản gốc (KEEP_ORIGINAL=false hoặc bản tối ưu trùng bản gốc).")
+		s.writeError(w, http.StatusNotFound, "original_not_kept", "No original is stored for this image (KEEP_ORIGINAL=false, or it is identical to the optimised copy).")
 		return
 	}
 	s.serveRendition(w, r, meta, *meta.Original)
@@ -105,7 +105,7 @@ func (s *Server) serveVariant(w http.ResponseWriter, r *http.Request, meta *stor
 			return
 		}
 		s.log.Error("variant.failed", "id", meta.ID, "key", key, "err", err)
-		s.writeError(w, http.StatusBadGateway, "resize_failed", "Không tạo được bản resize.")
+		s.writeError(w, http.StatusBadGateway, "resize_failed", "Could not generate the resized variant.")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (s *Server) parseVariant(query url.Values, meta *store.Meta) (variantSpec, 
 		case "inside", "cover", "contain":
 			spec.Fit = fitRaw
 		default:
-			return spec, false, fmt.Errorf("fit phải là inside, cover hoặc contain")
+			return spec, false, fmt.Errorf("fit must be inside, cover or contain")
 		}
 	}
 
@@ -210,7 +210,7 @@ func (s *Server) parseVariant(query url.Values, meta *store.Meta) (variantSpec, 
 		formatRaw = baseFormat
 	}
 	if !imageproc.SupportsFormat(formatRaw) {
-		return spec, false, fmt.Errorf("máy chủ này không xuất được định dạng %q", formatRaw)
+		return spec, false, fmt.Errorf("this server cannot encode %q", formatRaw)
 	}
 	spec.Format = formatRaw
 
@@ -238,20 +238,20 @@ func (s *Server) parseVariant(query url.Values, meta *store.Meta) (variantSpec, 
 func (s *Server) parseSize(raw, name string) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("%s phải là số nguyên dương", name)
+		return 0, fmt.Errorf("%s must be a positive integer", name)
 	}
 	if value > s.cfg.MaxVariantDimension {
-		return 0, fmt.Errorf("%s tối đa %d", name, s.cfg.MaxVariantDimension)
+		return 0, fmt.Errorf("%s must be at most %d", name, s.cfg.MaxVariantDimension)
 	}
 	if !s.cfg.SizeAllowed(value) {
 		if len(s.cfg.AllowedSizes) == 0 {
-			return 0, fmt.Errorf("%s không hợp lệ", name)
+			return 0, fmt.Errorf("%s is not valid", name)
 		}
 		allowed := make([]string, len(s.cfg.AllowedSizes))
 		for i, size := range s.cfg.AllowedSizes {
 			allowed[i] = strconv.Itoa(size)
 		}
-		return 0, fmt.Errorf("%s phải là một trong: %s", name, strings.Join(allowed, ", "))
+		return 0, fmt.Errorf("%s must be one of: %s", name, strings.Join(allowed, ", "))
 	}
 	return value, nil
 }

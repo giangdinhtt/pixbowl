@@ -27,7 +27,7 @@ func (s *Server) requireBasicAuth(next http.HandlerFunc) http.HandlerFunc {
 		// guessing and should cost the same budget.
 		if allowed, retry := s.authLimiter.Allow(s.clientIP(r)); !allowed {
 			w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retry.Seconds()))))
-			s.writeError(w, http.StatusTooManyRequests, "rate_limited", "Quá nhiều lần đăng nhập sai, thử lại sau.")
+			s.writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed logins, try again later.")
 			return
 		}
 

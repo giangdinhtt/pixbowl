@@ -116,7 +116,7 @@ func (s *Server) wrap(next http.Handler) http.Handler {
 			if recovered := recover(); recovered != nil {
 				s.log.Error("panic", "value", recovered, "path", r.URL.Path)
 				if !sw.wrote {
-					s.writeError(sw, http.StatusInternalServerError, "internal", "Có lỗi xảy ra.")
+					s.writeError(sw, http.StatusInternalServerError, "internal", "Something went wrong.")
 				}
 			}
 			if r.URL.Path != "/liveness" {
@@ -171,7 +171,7 @@ func (s *Server) allowedOrigin(origin string) (string, bool) {
 // handlePreflight rejects cross-origin preflights unless the origin is allowed.
 func (s *Server) handlePreflight(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.allowedOrigin(r.Header.Get("Origin")); !ok {
-		s.writeError(w, http.StatusForbidden, "cors_denied", "Origin này không được phép gọi API.")
+		s.writeError(w, http.StatusForbidden, "cors_denied", "This origin is not allowed to call the API.")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -198,7 +198,7 @@ func (s *Server) storeError(w http.ResponseWriter, err error) {
 		return
 	}
 	s.log.Error("storage", "err", err)
-	s.writeError(w, http.StatusInternalServerError, "storage_error", "Lỗi truy cập kho lưu trữ.")
+	s.writeError(w, http.StatusInternalServerError, "storage_error", "Could not access the storage backend.")
 }
 
 func (s *Server) clientIP(r *http.Request) string {
@@ -289,11 +289,11 @@ func buildIndexPage(cfg *config.Config) string {
 	formats := strings.Join(imageproc.Formats(), ", ")
 	maxDimension := strconv.Itoa(cfg.MaxDimension)
 	if cfg.MaxDimension == 0 {
-		maxDimension = "không giới hạn"
+		maxDimension = "unlimited"
 	}
-	keepOriginal := "có"
+	keepOriginal := "yes"
 	if !cfg.KeepOriginal {
-		keepOriginal = "không"
+		keepOriginal = "no"
 	}
 	return strings.NewReplacer(
 		"{{MAX_FILE_MB}}", strconv.FormatInt(cfg.MaxFileBytes>>20, 10),

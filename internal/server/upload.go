@@ -48,18 +48,18 @@ var errFileTooLarge = errors.New("file too large")
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if allowed, retry := s.uploadLimiter.Allow(s.clientIP(r)); !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retry.Seconds()))))
-		s.writeError(w, http.StatusTooManyRequests, "rate_limited", "Bạn đã upload quá nhiều, thử lại sau.")
+		s.writeError(w, http.StatusTooManyRequests, "rate_limited", "You are uploading too often, try again later.")
 		return
 	}
 
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "multipart/form-data") {
-		s.writeError(w, http.StatusUnsupportedMediaType, "multipart_required", `Gửi ảnh bằng multipart/form-data với field tên là "file".`)
+		s.writeError(w, http.StatusUnsupportedMediaType, "multipart_required", `Send images as multipart/form-data with a field named "file".`)
 		return
 	}
 
 	if !s.acquireUpload(r.Context()) {
 		w.Header().Set("Retry-After", "5")
-		s.writeError(w, http.StatusServiceUnavailable, "busy", "Máy chủ đang bận, thử lại sau vài giây.")
+		s.writeError(w, http.StatusServiceUnavailable, "busy", "The server is busy, try again in a few seconds.")
 		return
 	}
 	defer s.releaseUpload()
@@ -69,7 +69,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := r.MultipartReader()
 	if err != nil {
-		s.writeError(w, http.StatusBadRequest, "invalid_multipart", "Không đọc được multipart body.")
+		s.writeError(w, http.StatusBadRequest, "invalid_multipart", "Could not read the multipart body.")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			failures = append(failures, uploadFailure{Error: "invalid_multipart", Message: "Body bị cắt hoặc vượt quá giới hạn."})
+			failures = append(failures, uploadFailure{Error: "invalid_multipart", Message: "The body was truncated or exceeded the limit."})
 			break
 		}
 		if part.FormName() != "file" || part.FileName() == "" {
@@ -99,7 +99,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			failures = append(failures, uploadFailure{
 				Filename: filename,
 				Error:    "file_too_large",
-				Message:  fmt.Sprintf("Ảnh vượt quá %dMB.", s.cfg.MaxFileBytes>>20),
+				Message:  fmt.Sprintf("Image exceeds %dMB.", s.cfg.MaxFileBytes>>20),
 			})
 			continue
 		}
@@ -123,9 +123,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		if failures[0].Error == "file_too_large" || failures[0].Error == "invalid_multipart" {
 			status = http.StatusRequestEntityTooLarge
 		}
-		s.writeJSON(w, status, uploadResponse{Files: []uploadResult{}, Errors: failures, Error: "no_file_uploaded", Message: "Không ảnh nào upload được."})
+		s.writeJSON(w, status, uploadResponse{Files: []uploadResult{}, Errors: failures, Error: "no_file_uploaded", Message: "No image could be uploaded."})
 	default:
-		s.writeError(w, http.StatusBadRequest, "no_file", `Không thấy field "file" trong request.`)
+		s.writeError(w, http.StatusBadRequest, "no_file", `No "file" field found in the request.`)
 	}
 }
 
@@ -279,5 +279,5 @@ func failureFromError(filename string, err error) uploadFailure {
 			return uploadFailure{Filename: filename, Error: "unsupported_image", Message: imageErr.Msg}
 		}
 	}
-	return uploadFailure{Filename: filename, Error: "upload_failed", Message: "Không xử lý được ảnh."}
+	return uploadFailure{Filename: filename, Error: "upload_failed", Message: "Could not process the image."}
 }
