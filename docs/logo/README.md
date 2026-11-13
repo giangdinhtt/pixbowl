@@ -1,14 +1,19 @@
 # pixbowl logo
 
 The mark is a capital **P** whose counter is a **square pixel** — the initial and
-the idea in one shape. The wordmark is Inter SemiBold, outlined to paths and
-tracked at −1.8%.
+the idea in one shape. In the primary logo that P **is** the first letter of the
+name, set tight against `ixbowl`: the name reads as one word, not as a symbol
+parked next to a wordmark. The remaining letters are Inter SemiBold, outlined to
+paths and tracked at −1.8%; the P's 32/160 stroke matches Inter's stem weight.
 
 ## Files
 
 | File | Use |
 |---|---|
-| `pixbowl-symbol.svg` | primary mark, ink on light backgrounds |
+| `pixbowl-logo.svg` | **primary logo**: the P mark doubles as the first letter of the name |
+| `pixbowl-logo-white.svg` | one-colour reversed logo |
+| `pixbowl-logo-accent.svg` | two-colour logo for dark backgrounds (accent P, white text) |
+| `pixbowl-symbol.svg` | standalone mark, ink on light backgrounds |
 | `pixbowl-symbol-white.svg` | reversed mark for dark backgrounds |
 | `pixbowl-wordmark.svg` | wordmark only (headers, footers, README badges) |
 | `pixbowl-horizontal.svg` | mark + wordmark side by side (baseline aligned) |
@@ -32,7 +37,7 @@ readable dark square.
 |---|---|---|
 | Ink | `#0E1014` | primary on light backgrounds |
 | Paper | `#FFFFFF` | reversed mark |
-| Accent | `#7C9CFF` | dark backgrounds only — on white it is 2.6 : 1 |
+| Accent | `#7C9CFF` | the P in `pixbowl-logo-accent.svg`; dark backgrounds only (2.6 : 1 on white) |
 
 Two colours are enough. The one-colour versions must still work; never rely on
 the accent to carry the shape.
