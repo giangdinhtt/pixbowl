@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>pixbowl small-size symbol</title>
+  <!-- Same P, redrawn for 16 px: strokes 40, counter 56. -->
+  <path fill="#0E1014" fill-rule="evenodd" d="M56 40 H192 V160 H96 V216 H56 Z M112 76 H168 V132 H112 Z"/>
+</svg>
