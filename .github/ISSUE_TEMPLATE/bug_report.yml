@@ -1,0 +1,70 @@
+name: Bug report
+description: Report something that does not work as expected
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please search existing
+        issues first, and include a minimal reproduction if you can.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Commit SHA, Docker image tag, or release you are running
+      placeholder: e.g. 30082f0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage backend
+      options:
+        - local
+        - s3 (AWS / R2 / MinIO / B2)
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Docker or binary, libvips version if you know it
+      placeholder: Debian 12, Docker, libvips 8.16.1
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: curl commands or a minimal request sequence work best
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from the JSON logs, with secrets removed
+      render: shell
+    validations:
+      required: false

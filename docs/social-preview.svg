@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <radialGradient id="glow" cx="12%" cy="8%" r="75%">
+      <stop offset="0%" stop-color="#243463" stop-opacity="0.85"/>
+      <stop offset="55%" stop-color="#131726" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#0e1014" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0e1014"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+
+  <g fill="none" stroke="#1b2233">
+    <circle cx="1064" cy="200" r="210" stroke-width="1.5"/>
+    <circle cx="1064" cy="200" r="140" stroke-width="1.5"/>
+    <circle cx="1064" cy="200" r="70" stroke-width="1.5"/>
+  </g>
+  <rect x="1024" y="160" width="80" height="80" rx="18" fill="#7c9cff" opacity="0.95"/>
+
+  <text x="96" y="256" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="116" font-weight="700" letter-spacing="-5"><tspan fill="#7c9cff">pix</tspan><tspan fill="#e6e9ef">bowl</tspan></text>
+
+  <text x="100" y="320" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="30" fill="#8b94a3">Self-hosted image host · Go + libvips</text>
+
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" fill="#c9d1de">
+    <rect x="96" y="372" width="150" height="50" rx="25" fill="#161a21" stroke="#262c36"/>
+    <text x="171" y="404" text-anchor="middle">link-only</text>
+    <rect x="262" y="372" width="132" height="50" rx="25" fill="#161a21" stroke="#262c36"/>
+    <text x="328" y="404" text-anchor="middle">?w=320</text>
+    <rect x="410" y="372" width="86" height="50" rx="25" fill="#161a21" stroke="#262c36"/>
+    <text x="453" y="404" text-anchor="middle">S3</text>
+    <rect x="512" y="372" width="206" height="50" rx="25" fill="#161a21" stroke="#262c36"/>
+    <text x="615" y="404" text-anchor="middle">no database</text>
+  </g>
+
+  <text x="96" y="500" font-family="Menlo, Courier, monospace" font-size="25" fill="#7c9cff">https://pix.example.com/i/IwccWr3nkWvH.webp?w=320</text>
+
+  <line x1="96" y1="556" x2="1184" y2="556" stroke="#1b2233" stroke-width="1"/>
+
+  <text x="96" y="600" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="23" fill="#5b6472">github.com/giangdinhtt/pixbowl</text>
+</svg>
