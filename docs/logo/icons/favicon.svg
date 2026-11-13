@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>pixbowl</title><g transform="translate(5.12 5.12) scale(0.96)">
-  
-  <!-- Dark tile + small-size P (strokes 40, counter 56) at 68% of the canvas. -->
-  <rect width="256" height="256" rx="56" fill="#0E1014"/>
-  <g transform="translate(30.72 30.72) scale(0.76)">
-    <path fill="#FFFFFF" fill-rule="evenodd" d="M56 40 H192 V160 H96 V216 H56 Z M112 76 H168 V132 H112 Z"/>
-  </g>
-</g></svg>
