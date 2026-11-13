@@ -1,39 +1,39 @@
 # pixbowl
 
-Image host tối giản cho VPS yếu: upload công khai, trả link riêng cho từng ảnh, resize bằng query string, chạy trên một binary Go duy nhất và **không cần database**.
+A minimal image host for small VPSs: public uploads, one unguessable link per image, resize via query string, a single Go binary, and **no database**.
 
-- **Go + libvips** (qua `govips`) — cùng engine với sharp/imgproxy, nên resize/convert nhanh và tốn ít RAM.
-- **Không DB** — metadata là `meta.json` nằm cạnh ảnh (hoặc object `meta.json` trên S3).
-- **Local hoặc S3-compatible** — AWS S3, Cloudflare R2, MinIO, Backblaze B2.
-- **Rate limit 3 tầng**, CORS chặn mặc định, xoá bằng token từng ảnh hoặc admin token.
+- **Go + libvips** (via `govips`) — the same engine behind sharp and imgproxy, so resizing and format conversion are fast and memory-friendly.
+- **No database** — metadata is a `meta.json` file next to the image (or a `meta.json` object on S3).
+- **Local or S3-compatible** — AWS S3, Cloudflare R2, MinIO, Backblaze B2.
+- **Three-tier rate limiting**, CORS denied by default, per-image delete tokens or an admin token.
 
-## Tính năng
+## Features
 
-| Nhóm | Chi tiết |
+| Area | Details |
 |---|---|
-| Upload | public, nhiều file/request, kéo–thả, dán clipboard, validate magic bytes |
-| Xử lý ảnh | convert JPEG/PNG/WebP/AVIF, resize, auto-rotate, **strip EXIF/GPS** |
-| Serve | link khó đoán (12 ký tự base62), cache immutable 1 năm, ETag/304, Range |
-| Resize | `?w=320`, `?h=200`, `?w=640&h=640&fit=cover`, `?format=webp`, cache variant |
-| Xoá | `X-Delete-Token` (người upload) hoặc `Authorization: Bearer <ADMIN_TOKEN>` |
-| Chống lạm dụng | rate limit theo IP, giới hạn dung lượng/điểm ảnh, chặn SVG/HTML/PDF |
-| Xác thực | HTTP Basic Auth tuỳ chọn cho trang upload; link ảnh vẫn công khai |
-| Vận hành | `/liveness`, `/healthz`, log JSON, graceful shutdown, Docker non-root |
-| Riêng tư | link-only (`noindex`), không gallery, không liệt kê thư mục |
+| Upload | public, multiple files per request, drag & drop, clipboard paste, magic-byte validation |
+| Processing | convert JPEG/PNG/WebP/AVIF, resize, auto-rotate, **strip EXIF/GPS** |
+| Serving | unguessable links (12 base62 chars), one-year immutable cache, ETag/304, Range |
+| Resize | `?w=320`, `?h=200`, `?w=640&h=640&fit=cover`, `?format=webp`, cached variants |
+| Delete | `X-Delete-Token` (uploader) or `Authorization: Bearer <ADMIN_TOKEN>` |
+| Abuse control | per-IP rate limits, size/pixel caps, SVG/HTML/PDF rejected |
+| Auth | optional HTTP Basic Auth for the upload page; image links stay public |
+| Operations | `/liveness`, `/healthz`, JSON logs, graceful shutdown, non-root Docker |
+| Privacy | link-only (`noindex`), no gallery, no directory listing |
 
-## Chạy nhanh
+## Quick start
 
-### Docker (khuyến nghị)
+### Docker (recommended)
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
-# mở http://localhost:8080
+# open http://localhost:8080
 ```
 
-### Từ source
+### From source
 
-Cần Go 1.26+ **và** libvips (vì `govips` dùng cgo):
+Requires Go 1.26+ **and** libvips (`govips` uses cgo):
 
 ```bash
 # macOS
@@ -51,7 +51,7 @@ make build
 ### Upload
 
 ```bash
-curl -F "file=@anh.jpg" https://pix.example.com/upload
+curl -F "file=@photo.jpg" https://pix.example.com/upload
 ```
 
 ```json
@@ -69,25 +69,25 @@ curl -F "file=@anh.jpg" https://pix.example.com/upload
 }
 ```
 
-Nhiều file trong một request (tối đa `MAX_FILES_PER_UPLOAD`):
+Multiple files in one request (up to `MAX_FILES_PER_UPLOAD`):
 
 ```bash
 curl -F "file=@a.jpg" -F "file=@b.png" https://pix.example.com/upload
 # -> {"files":[...], "errors":[]}
 ```
 
-Lỗi từng file được trả trong `errors`, các file hợp lệ vẫn upload bình thường.
+Per-file failures are returned in `errors`; the valid files are still stored.
 
-### Lấy ảnh
+### Serving
 
 ```
-GET /i/<id>.<ext>    bản đã tối ưu
-GET /o/<id>.<ext>    bản gốc (chỉ khi KEEP_ORIGINAL=true)
+GET /i/<id>.<ext>    optimised copy
+GET /o/<id>.<ext>    original    (only when KEEP_ORIGINAL=true)
 ```
 
-Response có `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Robots-Tag: noindex`, `X-Content-Type-Options: nosniff`, hỗ trợ `If-None-Match` (304), `HEAD` và `Range`.
+Responses carry `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Robots-Tag: noindex` and `X-Content-Type-Options: nosniff`, and support `If-None-Match` (304), `HEAD` and `Range`.
 
-### Resize on-the-fly
+### Resize on the fly
 
 ```
 /i/<id>.<ext>?w=320
@@ -96,24 +96,24 @@ Response có `Cache-Control: public, max-age=31536000, immutable`, `ETag`, `X-Ro
 /i/<id>.<ext>?w=200&format=webp
 ```
 
-| Param | Giá trị | Mặc định |
+| Param | Values | Default |
 |---|---|---|
-| `w` | số nguyên, phải nằm trong `ALLOWED_SIZES` | — |
-| `h` | số nguyên, cùng whitelist | — |
+| `w` | integer, must be listed in `ALLOWED_SIZES` | — |
+| `h` | integer, same whitelist | — |
 | `fit` | `inside` \| `cover` \| `contain` | `inside` |
-| `format` | `webp` \| `jpeg` \| `png` \| `avif` | format của ảnh đang lưu |
+| `format` | `webp` \| `jpeg` \| `png` \| `avif` | format of the stored image |
 
-- `inside`: vừa trong khung, giữ tỉ lệ, **không phóng to**. Chỉ truyền `w` thì chiều cao tự tính.
-- `cover`: phủ kín khung rồi crop giữa, cho kết quả đúng kích thước (cho phép phóng to tối đa 2×).
-- `contain`: vừa khung, phần trống bù nền trắng.
-- Variant được sinh một lần rồi lưu tại `v/<key>` (local) hoặc `v/<key>` trên S3; request sau chỉ đọc file.
-- Kích thước không nằm trong `ALLOWED_SIZES` trả `400` — đây là chốt chặn để kẻ xấu không spam `?w=1..9999` đốt CPU/ổ đĩa.
-- Ảnh động (GIF/WebP animated) bỏ qua query và trả nguyên bản.
+- `inside`: fits the box, keeps the aspect ratio, **never enlarges**. With only `w`, the height is derived.
+- `cover`: fills the box and centre-crops, always returning the exact size (may enlarge up to 2×).
+- `contain`: fits the box and pads the rest with white.
+- A variant is generated once and stored at `v/<key>` (local) or `v/<key>` on S3; later requests just read the file.
+- Sizes outside `ALLOWED_SIZES` return `400` — this is what stops someone from spamming `?w=1..9999` to burn CPU and disk.
+- Animated images (GIF/animated WebP) ignore the query and are served untouched.
 
-### Xoá
+### Delete
 
 ```bash
-# người upload, dùng token nhận lúc upload
+# uploader, using the token returned at upload time
 curl -X DELETE -H "X-Delete-Token: qaKZNgkfd5vn..." \
   https://pix.example.com/i/IwccWr3nkWvH.webp
 
@@ -122,88 +122,91 @@ curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" \
   https://pix.example.com/i/IwccWr3nkWvH.webp
 ```
 
-Xoá luôn cả bản gốc và mọi variant. Token chỉ lưu dạng SHA-256. Sai token bị giới hạn riêng (`AUTH_ATTEMPTS_PER_MINUTE`) để không brute force được.
+Deleting removes the original and every cached variant. Only the SHA-256 of the token is stored. Wrong tokens are rate limited separately (`AUTH_ATTEMPTS_PER_MINUTE`) so they cannot be brute-forced.
 
-Trang `/d/<id>#<token>` cho phép xoá bằng trình duyệt; token nằm sau `#` nên không lọt vào log/referrer.
+The `/d/<id>#<token>` page lets you delete from a browser. The token lives in the URL fragment, so it never reaches server logs or referrers.
 
-### Bảo vệ trang upload bằng Basic Auth
+### Protecting uploads with Basic Auth
 
-`BASIC_AUTH` chỉ nhận **bcrypt hash** — mật khẩu không bao giờ nằm trong file cấu hình:
+`BASIC_AUTH` accepts **bcrypt hashes only** — the password itself never appears in your config:
 
 ```bash
-# macOS có sẵn /usr/sbin/htpasswd, Debian/Ubuntu: apt install apache2-utils
-BASIC_AUTH="$(htpasswd -nbB -C 10 alice 'mat-khau-manh')"
+# macOS ships /usr/sbin/htpasswd; on Debian/Ubuntu: apt install apache2-utils
+BASIC_AUTH="$(htpasswd -nbB -C 10 alice 'strong-password')"
 echo "$BASIC_AUTH"      # alice:$2y$10$...
 
 BASIC_AUTH="$BASIC_AUTH" ./bin/pixbowl
 ```
 
-Dạng `user:password` plain và base64 đều bị từ chối lúc khởi động, để một lần gõ nhầm không âm thầm biến thành mật khẩu plaintext. Hash phải đúng 60 ký tự và cost ≤ 14 (cost cao hơn khiến mỗi lần đăng nhập mất vài giây).
+Plain `user:password` and base64 forms are rejected at startup, so a typo cannot silently become a plaintext password. The hash must be exactly 60 characters with a cost of 14 or less (higher costs make every login take seconds).
 
 ```bash
-curl -u alice:mat-khau-manh -F "file=@anh.jpg" https://pix.example.com/upload
+curl -u alice:strong-password -F "file=@photo.jpg" https://pix.example.com/upload
 ```
 
-Trình duyệt sẽ hỏi mật khẩu khi mở `/`. Chỉ **trang `/` và endpoint `POST /upload`** bị bảo vệ — `/i/`, `/o/`, `/d/<id>#token` và `/healthz` vẫn công khai, vì chặn link ảnh thì không còn chia sẻ được nữa. Sai mật khẩu bị tính chung hạn mức với token xoá (`AUTH_ATTEMPTS_PER_MINUTE`, mặc định 10 lần/phút/IP).
+Browsers prompt once when you open `/`. Only **the page `/` and the `POST /upload` endpoint** are guarded — `/i/`, `/o/`, `/d/<id>#token` and `/healthz` stay public, because protecting image links would defeat the point of a link-only host. Failed logins share the delete-token budget (`AUTH_ATTEMPTS_PER_MINUTE`, 10 per IP per minute by default).
 
 ### Health
 
 ```
-GET /liveness   200 ok, dùng cho Docker healthcheck
-GET /healthz    kiểm tra storage thật, trả cả version libvips và format hỗ trợ
+GET /liveness   200 ok, for Docker healthchecks
+GET /healthz    checks the storage backend, returns the libvips version and supported formats
 ```
 
-## Cấu hình
+## Configuration
 
-Toàn bộ qua biến môi trường, xem `.env.example`. Những biến quan trọng:
+Everything is configured through environment variables; see `.env.example`. The important ones:
 
-| Biến | Mặc định | Ý nghĩa |
+| Variable | Default | Meaning |
 |---|---|---|
-| `PORT` / `HOST` | `8080` / `0.0.0.0` | địa chỉ lắng nghe |
-| `BASE_URL` | rỗng | origin công khai dùng trong URL trả về |
-| `TRUST_PROXY` | `false` | bật khi chạy sau Caddy/nginx (đọc `X-Forwarded-For`) |
-| `DATA_DIR` | `./data` | thư mục lưu ảnh (local) |
-| `STORAGE` | `local` | `local` hoặc `s3` |
-| `KEEP_ORIGINAL` | `true` | lưu cả bản gốc |
+| `PORT` / `HOST` | `8080` / `0.0.0.0` | listen address |
+| `BASE_URL` | empty | public origin used in returned URLs |
+| `TRUST_PROXY` | `false` | enable behind Caddy/nginx (read `X-Forwarded-For`) |
+| `DATA_DIR` | `./data` | image directory (local storage) |
+| `STORAGE` | `local` | `local` or `s3` |
+| `KEEP_ORIGINAL` | `true` | keep the untouched original |
 | `OUTPUT_FORMAT` | `preserve` | `preserve`/`jpeg`/`png`/`webp`/`avif` |
-| `QUALITY` | `82` | chất lượng nén |
-| `MAX_DIMENSION` | `2560` | cạnh dài tối đa của bản tối ưu, `0` = không resize |
-| `STRIP_METADATA` | `true` | xoá EXIF/GPS |
-| `MAX_FILE_MB` | `10` | dung lượng tối đa mỗi ảnh |
-| `MAX_FILES_PER_UPLOAD` | `10` | số ảnh tối đa mỗi request |
-| `MAX_PIXELS` | `40000000` | chặn ảnh quá lớn (bom nén) |
-| `RATE_LIMIT_PER_MINUTE` / `_HOUR` / `_DAY` | `20` / `200` / `1000` | giới hạn upload theo IP, `0` = tắt |
-| `AUTH_ATTEMPTS_PER_MINUTE` | `10` | giới hạn thử token xoá sai |
-| `ALLOWED_ORIGINS` | rỗng | danh sách origin được CORS, rỗng = chặn hẳn |
-| `ADMIN_TOKEN` | rỗng | token xoá mọi ảnh |
-| `BASIC_AUTH` | rỗng | bảo vệ `/` và `POST /upload`; chỉ nhận `user:<bcrypt hash>` |
-| `ALLOWED_SIZES` | `100,200,...,2560` | whitelist `?w=`/`?h=`, để trống = mọi giá trị 16..`MAX_VARIANT_DIMENSION` |
-| `MAX_VARIANT_DIMENSION` | `4096` | chặn kích thước variant quá lớn |
-| `VIPS_CONCURRENCY` | `1` | số thread libvips cho mỗi ảnh |
-| `MAX_CONCURRENT_UPLOADS` | `2` | số upload xử lý song song |
-| `MAX_CONCURRENT_VARIANTS` | `1` | số variant sinh song song |
+| `QUALITY` | `82` | encoder quality |
+| `MAX_DIMENSION` | `2560` | longest edge of the optimised copy, `0` = no resize |
+| `STRIP_METADATA` | `true` | strip EXIF/GPS |
+| `MAX_FILE_MB` | `10` | max size per image |
+| `MAX_FILES_PER_UPLOAD` | `10` | max images per request |
+| `MAX_PIXELS` | `40000000` | rejects huge images (decompression bombs) |
+| `RATE_LIMIT_PER_MINUTE` / `_HOUR` / `_DAY` | `20` / `200` / `1000` | per-IP upload limits, `0` disables |
+| `AUTH_ATTEMPTS_PER_MINUTE` | `10` | limit for wrong delete tokens and logins |
+| `ALLOWED_ORIGINS` | empty | CORS allowlist; empty means no cross-origin access |
+| `ADMIN_TOKEN` | empty | token that may delete any image |
+| `BASIC_AUTH` | empty | guards `/` and `POST /upload`; accepts `user:<bcrypt hash>` only |
+| `ALLOWED_SIZES` | `100,200,...,2560` | `?w=`/`?h=` whitelist; empty means any value from 16 to `MAX_VARIANT_DIMENSION` |
+| `MAX_VARIANT_DIMENSION` | `4096` | hard cap on variant dimensions |
+| `VIPS_CONCURRENCY` | `1` | libvips threads per image |
+| `MAX_CONCURRENT_UPLOADS` | `2` | uploads processed in parallel |
+| `UPLOAD_QUEUE_LIMIT` | `32` | requests allowed to wait for a worker |
+| `MAX_CONCURRENT_VARIANTS` | `1` | variants generated in parallel |
+| `ID_LENGTH` | `12` | base62 id length, 8–64 |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 
 S3: `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `S3_PREFIX`, `S3_USE_SSL`.
 
-## Dữ liệu lưu thế nào (không DB)
+## Storage layout (no database)
 
 ```
 data/
   aB/
     aB3xK9mQ2pL7/
-      image.webp        bản tối ưu  -> /i/
-      original.jpg      bản gốc      -> /o/   (nếu KEEP_ORIGINAL)
-      meta.json         id, created_at, sha256, kích thước, mime, hash token xoá
+      image.webp        optimised copy -> /i/
+      original.jpg      original       -> /o/   (when KEEP_ORIGINAL)
+      meta.json         id, created_at, sha256, size, mime, delete-token hash
       v/
         w320-h0-inside-webp
         w640-h640-cover-webp
 ```
 
-S3 dùng cùng layout: `<S3_PREFIX><id>/image.webp|meta.json|v/<key>`.
+S3 uses the same layout: `<S3_PREFIX><id>/image.webp|meta.json|v/<key>`.
 
-`image`/`original` được ghi trước, `meta.json` ghi sau cùng — request nào không thấy meta thì coi như 404, không bao giờ serve file dở dang. Backup = copy thư mục `data/` hoặc sync bucket.
+`image`/`original` are written first and `meta.json` last — a request that finds no metadata gets a 404, so a half-written upload is never served. Backups are just a copy of `data/` or a bucket sync.
 
-## Triển khai
+## Deployment
 
 ### Caddy
 
@@ -213,7 +216,7 @@ pix.example.com {
 }
 ```
 
-Đặt `TRUST_PROXY=true` và `BASE_URL=https://pix.example.com`, nếu không rate limit sẽ thấy mọi request đến từ `127.0.0.1`.
+Set `TRUST_PROXY=true` and `BASE_URL=https://pix.example.com`, otherwise the rate limiter sees every request coming from `127.0.0.1`.
 
 ### nginx
 
@@ -245,40 +248,40 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-## Bảo mật
+## Security
 
-- **EXIF/GPS bị xoá** mặc định — ảnh điện thoại không làm lộ vị trí người upload.
-- **Chỉ nhận ảnh thật**: kiểm tra magic bytes, chặn SVG/HTML/PDF (SVG là vector XSS), giới hạn `MAX_PIXELS` trước khi decode.
-- **Không bao giờ serve HTML do người dùng kiểm soát**: ảnh trả với `nosniff`, trang HTML có CSP `default-src 'none'`.
-- **ID 12 ký tự base62** (~71 bit) — không đoán được, không liệt kê được.
-- **Token xoá lưu dạng hash**, so sánh constant-time, giới hạn số lần thử.
-- **Upload có thể khoá bằng Basic Auth** (`BASIC_AUTH`, chỉ nhận bcrypt hash); link ảnh vẫn công khai theo đúng mô hình link-only.
-- **Không có CORS mặc định** — JS ở site khác không đọc được ảnh; `<img>` vẫn nhúng bình thường.
-- **AVIF phụ thuộc build libvips**. Nếu `heifsave` không có, server trả `400` cho `?format=avif` và từ chối khởi động với `OUTPUT_FORMAT=avif`. Kiểm tra `/healthz` để biết format hỗ trợ.
+- **EXIF/GPS stripped by default** — phone photos do not leak the uploader's location.
+- **Real images only**: magic-byte checks, SVG/HTML/PDF rejected (SVG is an XSS vector), `MAX_PIXELS` enforced before decoding.
+- **Never serves user-controlled HTML**: images go out with `nosniff`, HTML pages carry a `default-src 'none'` CSP.
+- **12-character base62 IDs** (~71 bits) — unguessable and unenumerable.
+- **Delete tokens are stored hashed**, compared in constant time, and rate limited.
+- **Uploads can be locked with Basic Auth** (`BASIC_AUTH`, bcrypt only); image links stay public, as a link-only host requires.
+- **No CORS by default** — JavaScript on other sites cannot read images; plain `<img>` embedding still works.
+- **AVIF depends on the libvips build**. Without `heifsave`, the server returns `400` for `?format=avif` and refuses to start with `OUTPUT_FORMAT=avif`. Check `/healthz` for the formats actually available.
 
-## Phát triển
+## Development
 
 ```bash
-make test     # go test ./... (cần libvips)
+make test     # go test ./... (needs libvips)
 make vet
 make build
 ```
 
 ```
-cmd/pixbowl/         khởi động, graceful shutdown
-internal/config/     đọc env, validate, defaults
-internal/imageproc/  pipeline libvips + detect encoder (cgo)
-internal/store/      interface + local + S3 (không DB)
-internal/server/     routes, rate limit, auth, CORS, pages
-internal/ratelimit/  fixed-window theo IP
-web/                 trang upload và trang xoá (embed)
+cmd/pixbowl/         startup, graceful shutdown
+internal/config/     env parsing, validation, defaults
+internal/imageproc/  libvips pipeline + encoder detection (cgo)
+internal/store/      interface + local + S3 (no DB)
+internal/server/     routes, rate limiting, auth, CORS, pages
+internal/ratelimit/  per-IP fixed windows
+web/                 upload and delete pages (embedded)
 ```
 
-Test chạy thật: upload multipart, serve, ETag/304, resize, rate limit, CORS, xoá, path traversal.
+The tests exercise the real thing: multipart upload, serving, ETag/304, resizing, rate limiting, CORS, deletion and path traversal.
 
-## Giới hạn đã biết
+## Known limitations
 
-- **Một instance**: rate limit và single-flight nằm trong RAM. Chạy nhiều replica cần rate limit ở tầng proxy (hoặc chấp nhận mỗi replica một hạn mức).
-- **Ảnh động** được giữ nguyên byte gốc, không resize/convert — đổi lại không mất frame và không đốt CPU.
-- **Không dedup theo hash**: cần index, mà index thì cần DB.
-- **Không có gallery/account/dashboard** — đúng định hướng link-only.
+- **Single instance**: rate limits and variant single-flight live in memory. Running multiple replicas needs rate limiting at the proxy (or one budget per replica).
+- **Animated images** are served byte-for-byte, never resized or converted — that keeps every frame and stays cheap on CPU.
+- **No hash-based deduplication**: it needs an index, and an index needs a database.
+- **No gallery, accounts or dashboard** — link-only by design.

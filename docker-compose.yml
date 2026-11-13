@@ -10,12 +10,12 @@ services:
       OUTPUT_FORMAT: webp
       KEEP_ORIGINAL: "true"
       MAX_FILE_MB: "10"
-      # Chỉ bật TRUST_PROXY khi server nằm sau Caddy/nginx, nếu không
-      # kẻ tấn công có thể giả X-Forwarded-For để né rate limit.
+      # Only enable TRUST_PROXY behind Caddy/nginx, otherwise clients can
+      # spoof X-Forwarded-For and bypass the rate limiter.
       # TRUST_PROXY: "true"
       # BASE_URL: "https://pix.example.com"
-      # ADMIN_TOKEN: "doi-thanh-chuoi-bi-mat"
-      # BASIC_AUTH: "alice:$2y$10$..."   # htpasswd -nbB -C 10 alice 'mat-khau' 
+      # ADMIN_TOKEN: "change-me"
+      # BASIC_AUTH: "alice:$2y$10$..."   # htpasswd -nbB -C 10 alice 'password' 
       # ALLOWED_ORIGINS: "https://app.example.com"
     volumes:
       - ./data:/data
