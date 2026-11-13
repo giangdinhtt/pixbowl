@@ -1,5 +1,7 @@
 # pixbowl
 
+<img src="docs/logo/pixbowl-horizontal.svg" alt="pixbowl logo" width="320">
+
 A minimal image host for small VPSs: public uploads, one unguessable link per image, resize via query string, a single Go binary, and **no database**.
 
 - **Go + libvips** (via `govips`) — the same engine behind sharp and imgproxy, so resizing and format conversion are fast and memory-friendly.

@@ -99,9 +99,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /liveness", s.handleLiveness)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /robots.txt", s.handleRobots)
-	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
+	mux.HandleFunc("GET /favicon.ico", s.handleFaviconICO)
+	mux.HandleFunc("GET /favicon.svg", s.handleFaviconSVG)
 	mux.HandleFunc("OPTIONS /", s.handlePreflight)
 
 	return s.wrap(mux)

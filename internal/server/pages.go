@@ -9,6 +9,7 @@ import (
 
 	"github.com/giangdinhtt/pixbowl/internal/id"
 	"github.com/giangdinhtt/pixbowl/internal/imageproc"
+	"github.com/giangdinhtt/pixbowl/web"
 )
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
@@ -28,6 +29,18 @@ func (s *Server) handleDeletePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 	_, _ = io.WriteString(w, strings.ReplaceAll(s.deletePage, "{{ID}}", imageID))
+}
+
+func (s *Server) handleFaviconSVG(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(web.FaviconSVG)
+}
+
+func (s *Server) handleFaviconICO(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(web.FaviconICO)
 }
 
 func (s *Server) handleLiveness(w http.ResponseWriter, _ *http.Request) {

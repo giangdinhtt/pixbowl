@@ -681,3 +681,21 @@ func TestUploadTokenAlongsideBasicAuth(t *testing.T) {
 		t.Fatalf("upload via token = %d, want 200", viaToken.StatusCode)
 	}
 }
+
+func TestFavicons(t *testing.T) {
+	ts := newTestServer(t, nil)
+	cases := []struct{ path, contentType string }{
+		{"/favicon.svg", "image/svg+xml"},
+		{"/favicon.ico", "image/x-icon"},
+	}
+	for _, tc := range cases {
+		resp := get(t, ts.URL+tc.path)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s = %d, want 200", tc.path, resp.StatusCode)
+		}
+		if got := resp.Header.Get("Content-Type"); got != tc.contentType {
+			t.Errorf("%s content type = %q, want %q", tc.path, got, tc.contentType)
+		}
+	}
+}
