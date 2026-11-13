@@ -75,6 +75,13 @@
   }
   footer { margin-top: 30px; color: var(--muted); font-size: 12px; }
   footer code { color: #b7c3d8; }
+  #tokenBox { display: flex; gap: 8px; margin-top: 14px; }
+  #tokenBox[hidden] { display: none; }
+  #tokenBox input {
+    flex: 1; background: #0b0d11; color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 9px 11px; font: 13px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
 </style>
 </head>
 <body>
@@ -87,6 +94,11 @@
     <small>or click to choose · max {{MAX_FILE_MB}}MB per image · {{MAX_FILES}} per upload</small>
   </div>
   <input id="file" type="file" accept="image/*" multiple hidden>
+
+  <div id="tokenBox" hidden>
+    <input id="token" type="password" placeholder="Upload token" autocomplete="off" spellcheck="false">
+    <button id="saveToken" type="button">Save token</button>
+  </div>
 
   <div id="status" aria-live="polite"></div>
   <div id="results"></div>
@@ -103,6 +115,22 @@
   const input = document.getElementById('file');
   const statusEl = document.getElementById('status');
   const results = document.getElementById('results');
+
+  const AUTH_MODE = '{{AUTH_MODE}}';
+  const tokenBox = document.getElementById('tokenBox');
+  const tokenInput = document.getElementById('token');
+  let uploadToken = '';
+
+  if (AUTH_MODE === 'token') {
+    tokenBox.hidden = false;
+    uploadToken = localStorage.getItem('pixbowl.token') || '';
+    tokenInput.value = uploadToken;
+    document.getElementById('saveToken').addEventListener('click', function () {
+      uploadToken = tokenInput.value.trim();
+      localStorage.setItem('pixbowl.token', uploadToken);
+      setStatus(uploadToken ? 'Upload token saved.' : 'Upload token cleared.', false);
+    });
+  }
 
   function setStatus(text, isError) {
     statusEl.textContent = text || '';
@@ -182,6 +210,11 @@
       setStatus('No image files selected.', true);
       return;
     }
+    if (AUTH_MODE === 'token' && !uploadToken) {
+      setStatus('Enter an upload token first.', true);
+      tokenInput.focus();
+      return;
+    }
     if (files.length > MAX_FILES) {
       files = files.slice(0, MAX_FILES);
       setStatus('Only the first ' + MAX_FILES + ' images will be sent.', false);
@@ -192,9 +225,14 @@
     const form = new FormData();
     for (const file of files) form.append('file', file);
 
+    const options = { method: 'POST', body: form };
+    if (AUTH_MODE === 'token') {
+      options.headers = { Authorization: 'Bearer ' + uploadToken };
+    }
+
     let response;
     try {
-      response = await fetch('/upload', { method: 'POST', body: form });
+      response = await fetch('/upload', options);
     } catch (err) {
       setStatus('Network error: ' + err.message, true);
       return;
@@ -210,7 +248,9 @@
     }
 
     if (!response.ok) {
-      setStatus(payload.message || 'Upload failed (' + response.status + ').', true);
+      const message = payload.message || 'Upload failed (' + response.status + ').';
+      const text = response.status === 401 && AUTH_MODE === 'token' ? 'Invalid upload token.' : message;
+      setStatus(text, true);
     } else if (errors.length) {
       setStatus('Done: ' + items.length + ' uploaded, ' + errors.length + ' failed.', true);
     } else {

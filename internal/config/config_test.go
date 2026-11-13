@@ -171,3 +171,17 @@ func TestBasicAuthConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestUploadTokenConfig(t *testing.T) {
+	if _, err := loadMap(map[string]string{"UPLOAD_TOKEN": "too-short"}); err == nil {
+		t.Fatal("short upload token must be rejected")
+	}
+
+	cfg, err := loadMap(map[string]string{"UPLOAD_TOKEN": "0123456789abcdef"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UploadToken != "0123456789abcdef" {
+		t.Fatalf("upload token = %q", cfg.UploadToken)
+	}
+}

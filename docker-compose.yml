@@ -16,6 +16,7 @@ services:
       # BASE_URL: "https://pix.example.com"
       # ADMIN_TOKEN: "change-me"
       # BASIC_AUTH: "alice:$2y$10$..."   # htpasswd -nbB -C 10 alice 'password' 
+      # UPLOAD_TOKEN: "change-me-16-chars-min"
       # ALLOWED_ORIGINS: "https://app.example.com"
     volumes:
       - ./data:/data

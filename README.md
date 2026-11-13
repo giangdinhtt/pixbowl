@@ -17,7 +17,7 @@ A minimal image host for small VPSs: public uploads, one unguessable link per im
 | Resize | `?w=320`, `?h=200`, `?w=640&h=640&fit=cover`, `?format=webp`, cached variants |
 | Delete | `X-Delete-Token` (uploader) or `Authorization: Bearer <ADMIN_TOKEN>` |
 | Abuse control | per-IP rate limits, size/pixel caps, SVG/HTML/PDF rejected |
-| Auth | optional HTTP Basic Auth for the upload page; image links stay public |
+| Auth | optional Basic Auth for the upload page, plus `UPLOAD_TOKEN` for scripts; image links stay public |
 | Operations | `/liveness`, `/healthz`, JSON logs, graceful shutdown, non-root Docker |
 | Privacy | link-only (`noindex`), no gallery, no directory listing |
 
@@ -146,6 +146,26 @@ curl -u alice:strong-password -F "file=@photo.jpg" https://pix.example.com/uploa
 
 Browsers prompt once when you open `/`. Only **the page `/` and the `POST /upload` endpoint** are guarded — `/i/`, `/o/`, `/d/<id>#token` and `/healthz` stay public, because protecting image links would defeat the point of a link-only host. Failed logins share the delete-token budget (`AUTH_ATTEMPTS_PER_MINUTE`, 10 per IP per minute by default).
 
+### Upload tokens for scripts
+
+`UPLOAD_TOKEN` is a bearer credential that only opens `POST /upload`. It cannot
+delete, list, or read anything:
+
+```bash
+UPLOAD_TOKEN="$(openssl rand -hex 24)" ./bin/pixbowl
+
+curl -H "Authorization: Bearer $UPLOAD_TOKEN" \
+  -F "file=@photo.jpg" https://pix.example.com/upload
+```
+
+- Minimum 16 characters; the server refuses to start with a shorter one.
+- Works alongside `BASIC_AUTH`: browsers keep using the password prompt, scripts
+  use the token.
+- With only `UPLOAD_TOKEN` set (no Basic Auth), the page stays public but asks
+  for the token in a small field before uploading; it is kept in `localStorage`.
+- Leaking it lets someone upload images (rate limits still apply) but never
+  delete anything: `DELETE` still needs `X-Delete-Token` or `ADMIN_TOKEN`.
+
 ### Health
 
 ```
@@ -176,6 +196,7 @@ Everything is configured through environment variables; see `.env.example`. The 
 | `AUTH_ATTEMPTS_PER_MINUTE` | `10` | limit for wrong delete tokens and logins |
 | `ALLOWED_ORIGINS` | empty | CORS allowlist; empty means no cross-origin access |
 | `ADMIN_TOKEN` | empty | token that may delete any image |
+| `UPLOAD_TOKEN` | empty | bearer token accepted by `POST /upload` only; min 16 chars |
 | `BASIC_AUTH` | empty | guards `/` and `POST /upload`; accepts `user:<bcrypt hash>` only |
 | `ALLOWED_SIZES` | `100,200,...,2560` | `?w=`/`?h=` whitelist; empty means any value from 16 to `MAX_VARIANT_DIMENSION` |
 | `MAX_VARIANT_DIMENSION` | `4096` | hard cap on variant dimensions |
@@ -255,7 +276,8 @@ WantedBy=multi-user.target
 - **Never serves user-controlled HTML**: images go out with `nosniff`, HTML pages carry a `default-src 'none'` CSP.
 - **12-character base62 IDs** (~71 bits) — unguessable and unenumerable.
 - **Delete tokens are stored hashed**, compared in constant time, and rate limited.
-- **Uploads can be locked with Basic Auth** (`BASIC_AUTH`, bcrypt only); image links stay public, as a link-only host requires.
+- **Uploads can be locked with Basic Auth** (`BASIC_AUTH`, bcrypt only) or an upload-only bearer token (`UPLOAD_TOKEN`); image links stay public, as a link-only host requires.
+- **`UPLOAD_TOKEN` cannot delete**: a leaked script token can waste disk (rate limits still apply) but never remove someone else's image.
 - **No CORS by default** — JavaScript on other sites cannot read images; plain `<img>` embedding still works.
 - **AVIF depends on the libvips build**. Without `heifsave`, the server returns `400` for `?format=avif` and refuses to start with `OUTPUT_FORMAT=avif`. Check `/healthz` for the formats actually available.
 

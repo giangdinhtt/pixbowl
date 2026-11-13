@@ -117,10 +117,20 @@ func testPNG(t *testing.T, w, h int) []byte {
 
 func uploadRequest(t *testing.T, ts *httptest.Server, files map[string][]byte) *http.Response {
 	t.Helper()
-	return uploadRequestAs(t, ts, files, "", "")
+	return uploadRequestAuth(t, ts, files, "", "", "")
 }
 
 func uploadRequestAs(t *testing.T, ts *httptest.Server, files map[string][]byte, user, pass string) *http.Response {
+	t.Helper()
+	return uploadRequestAuth(t, ts, files, user, pass, "")
+}
+
+func uploadRequestBearer(t *testing.T, ts *httptest.Server, files map[string][]byte, token string) *http.Response {
+	t.Helper()
+	return uploadRequestAuth(t, ts, files, "", "", token)
+}
+
+func uploadRequestAuth(t *testing.T, ts *httptest.Server, files map[string][]byte, user, pass, bearer string) *http.Response {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -144,6 +154,9 @@ func uploadRequestAs(t *testing.T, ts *httptest.Server, files map[string][]byte,
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if user != "" || pass != "" {
 		req.SetBasicAuth(user, pass)
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
@@ -565,5 +578,106 @@ func TestBasicAuthBcrypt(t *testing.T) {
 	bad.Body.Close()
 	if bad.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("wrong password = %d, want 401", bad.StatusCode)
+	}
+}
+
+func TestUploadTokenGuardsUploadOnly(t *testing.T) {
+	const token = "0123456789abcdef"
+
+	cfg := testConfig(t)
+	cfg.BasicAuthUser = ""
+	cfg.BasicAuthHash = ""
+	cfg.UploadToken = token
+	ts := newTestServer(t, cfg)
+
+	// The page itself is public in token-only mode; it asks for the token.
+	page := get(t, ts.URL+"/")
+	page.Body.Close()
+	if page.StatusCode != http.StatusOK {
+		t.Fatalf("index = %d, want 200", page.StatusCode)
+	}
+
+	anonymous := uploadRequest(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)})
+	anonymous.Body.Close()
+	if anonymous.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("upload without token = %d, want 401", anonymous.StatusCode)
+	}
+	if anonymous.Header.Get("WWW-Authenticate") != "" {
+		t.Fatal("must not advertise Basic auth when it is not configured")
+	}
+
+	wrong := uploadRequestBearer(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)}, "not-the-token")
+	wrong.Body.Close()
+	if wrong.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("upload with wrong token = %d, want 401", wrong.StatusCode)
+	}
+
+	allowed := uploadRequestBearer(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)}, token)
+	if allowed.StatusCode != http.StatusOK {
+		t.Fatalf("upload with token = %d, want 200", allowed.StatusCode)
+	}
+	payload := decodeUpload(t, allowed)
+
+	// The upload token must not be able to delete anything.
+	deleteReq, err := http.NewRequest(http.MethodDelete, payload.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteResp, err := http.DefaultClient.Do(deleteReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteResp.Body.Close()
+	if deleteResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("delete with upload token = %d, want 401", deleteResp.StatusCode)
+	}
+
+	// The per-image token still works.
+	ownDelete, err := http.NewRequest(http.MethodDelete, payload.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownDelete.Header.Set("X-Delete-Token", payload.DeleteToken)
+	ownResp, err := http.DefaultClient.Do(ownDelete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownResp.Body.Close()
+	if ownResp.StatusCode != http.StatusOK {
+		t.Fatalf("delete with image token = %d, want 200", ownResp.StatusCode)
+	}
+}
+
+func TestUploadTokenAlongsideBasicAuth(t *testing.T) {
+	const token = "fedcba9876543210"
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("s3cret"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig(t)
+	cfg.BasicAuthUser = "alice"
+	cfg.BasicAuthHash = string(hash)
+	cfg.UploadToken = token
+	ts := newTestServer(t, cfg)
+
+	// The UI page still requires Basic auth.
+	page := get(t, ts.URL+"/")
+	page.Body.Close()
+	if page.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("index = %d, want 401", page.StatusCode)
+	}
+
+	viaBasic := uploadRequestAs(t, ts, map[string][]byte{"a.png": testPNG(t, 40, 40)}, "alice", "s3cret")
+	viaBasic.Body.Close()
+	if viaBasic.StatusCode != http.StatusOK {
+		t.Fatalf("upload via basic = %d, want 200", viaBasic.StatusCode)
+	}
+
+	viaToken := uploadRequestBearer(t, ts, map[string][]byte{"b.png": testPNG(t, 40, 40)}, token)
+	viaToken.Body.Close()
+	if viaToken.StatusCode != http.StatusOK {
+		t.Fatalf("upload via token = %d, want 200", viaToken.StatusCode)
 	}
 }

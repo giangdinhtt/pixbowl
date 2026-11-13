@@ -87,9 +87,9 @@ func (s *Server) cleanupLoop() {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /{$}", s.requireBasicAuth(s.handleIndex))
-	mux.HandleFunc("POST /{$}", s.requireBasicAuth(s.handleUpload))
-	mux.HandleFunc("POST /upload", s.requireBasicAuth(s.handleUpload))
+	mux.HandleFunc("GET /{$}", s.requireUI(s.handleIndex))
+	mux.HandleFunc("POST /{$}", s.requireUpload(s.handleUpload))
+	mux.HandleFunc("POST /upload", s.requireUpload(s.handleUpload))
 
 	mux.HandleFunc("GET /i/{name}", s.handleImage)
 	mux.HandleFunc("GET /o/{name}", s.handleOriginal)
@@ -295,12 +295,21 @@ func buildIndexPage(cfg *config.Config) string {
 	if !cfg.KeepOriginal {
 		keepOriginal = "no"
 	}
+	// "token" mode means the page itself is public but uploads need a token,
+	// so the UI has to ask for one before the first drop.
+	authMode := "open"
+	if cfg.BasicAuthEnabled() {
+		authMode = "basic"
+	} else if cfg.UploadToken != "" {
+		authMode = "token"
+	}
 	return strings.NewReplacer(
 		"{{MAX_FILE_MB}}", strconv.FormatInt(cfg.MaxFileBytes>>20, 10),
 		"{{MAX_FILES}}", strconv.Itoa(cfg.MaxFiles),
 		"{{FORMATS}}", formats,
 		"{{MAX_DIMENSION}}", maxDimension,
 		"{{KEEP_ORIGINAL}}", keepOriginal,
+		"{{AUTH_MODE}}", authMode,
 	).Replace(web.IndexHTML)
 }
 

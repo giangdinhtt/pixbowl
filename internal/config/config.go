@@ -52,9 +52,9 @@ type Config struct {
 	AuthAttemptsPerMinute int
 	AllowedOrigins        []string
 	AdminToken            string
+	UploadToken           string
 	BasicAuthUser         string
-	BasicAuthSecret       string // plain-text password, empty when BasicAuthHash is used
-	BasicAuthHash         string // bcrypt hash, mutually exclusive with BasicAuthSecret
+	BasicAuthHash         string // bcrypt hash; the password itself is never stored
 
 	Concurrency           int
 	MaxConcurrentUploads  int
@@ -201,6 +201,10 @@ func load(lookup lookupFunc) (*Config, error) {
 
 	cfg.AllowedOrigins = splitList(envString(lookup, "ALLOWED_ORIGINS", ""))
 	cfg.AdminToken = envString(lookup, "ADMIN_TOKEN", "")
+	cfg.UploadToken = envString(lookup, "UPLOAD_TOKEN", "")
+	if cfg.UploadToken != "" && len(cfg.UploadToken) < 16 {
+		return nil, fmt.Errorf("UPLOAD_TOKEN must be at least 16 characters")
+	}
 
 	// Basic auth only guards the upload UI and the upload endpoint; public
 	// image links stay reachable without credentials.
